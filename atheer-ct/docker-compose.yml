@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: atheer
+      POSTGRES_USER: atheer
+      POSTGRES_PASSWORD: atheer123
+    ports:
+      - "5430:5432"
+
+#  backend:
+#    build:
+#      context: ./backend
+#      dockerfile: Dockerfile
+#    ports:
+#      - "8081:8081"
+#    environment:
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/atheer_ct
+#      SPRING_DATASOURCE_USERNAME: atheer_ct
+#      SPRING_DATASOURCE_PASSWORD: atheer_ct123
+#      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+#    depends_on:
+#      - postgres
+#    networks:
+#      - atheer_ct-network
+#
+#networks:
+#  atheer_ct-network:
+#    driver: bridge
+#
+volumes:
+  postgres_data:
