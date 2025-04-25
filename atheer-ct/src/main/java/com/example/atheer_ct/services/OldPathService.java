@@ -1,5 +1,6 @@
 package com.example.atheer_ct.services;
 
+
 import com.example.atheer_ct.dto.TowerDto;
 import com.example.atheer_ct.entities.Tower;
 import com.example.atheer_ct.repo.TowerRepository;
@@ -9,12 +10,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-public class PathService {
+public class OldPathService {
+
 
     private final TowerRepository towerRepository;
     private final double MAX_TOWER_DISTANCE = 10.1; // Strict 10km constraint
 
-    public PathService(TowerRepository towerRepository) {
+    public OldPathService(TowerRepository towerRepository) {
         this.towerRepository = towerRepository;
     }
 
@@ -139,46 +141,16 @@ public class PathService {
         towerMap.put(getTowerId(end), end);
         allTowers.forEach(t -> towerMap.put(getTowerId(t), t));
 
+        // BFS for shortest path (fewest hops)
+        Queue<String> queue = new LinkedList<>();
+        Map<String, String> previous = new HashMap<>();
+        Set<String> visited = new HashSet<>();
+
         String startId = getTowerId(start);
         String endId = getTowerId(end);
 
-        // Track visited nodes and path construction
-        Map<String, String> previous = new HashMap<>();
-        Set<String> visited = new HashSet<>();
-        Map<String, Double> distanceSoFar = new HashMap<>(); // Track distance traveled to each node
-
-        // A* algorithm implementation
-        PriorityQueue<String> queue = new PriorityQueue<>((a, b) -> {
-            TowerDto towerA = towerMap.get(a);
-            TowerDto towerB = towerMap.get(b);
-
-            // Distance to end (heuristic component)
-            double distA = calculateDistance(
-                    towerA.getLatitude(), towerA.getLongitude(),
-                    end.getLatitude(), end.getLongitude()
-            );
-
-            double distB = calculateDistance(
-                    towerB.getLatitude(), towerB.getLongitude(),
-                    end.getLatitude(), end.getLongitude()
-            );
-
-            // Get path lengths so far (distance traveled component)
-            double pathDistA = getPathDistance(previous, towerMap, startId, a);
-            double pathDistB = getPathDistance(previous, towerMap, startId, b);
-
-            // Combine the metrics with appropriate weights
-            // Adjust this weight (1.5) to balance between fewer hops vs. shorter distance
-            double scoreA = pathDistA + (distA * 1.5);
-            double scoreB = pathDistB + (distB * 1.5);
-
-            return Double.compare(scoreA, scoreB);
-        });
-
-        // Initialize
         queue.add(startId);
         visited.add(startId);
-        distanceSoFar.put(startId, 0.0);
 
         boolean pathFound = false;
 
@@ -208,24 +180,29 @@ public class PathService {
                 }
             }
 
-            // Process all neighbors
-            for (String neighborId : neighbors) {
-                // Calculate new distance
-                TowerDto neighbor = towerMap.get(neighborId);
-                double segmentDistance = calculateDistance(
-                        currentTower.getLatitude(), currentTower.getLongitude(),
-                        neighbor.getLatitude(), neighbor.getLongitude()
+            // Sort neighbors by their proximity to the end point (greedy approach)
+            neighbors.sort((a, b) -> {
+                TowerDto towerA = towerMap.get(a);
+                TowerDto towerB = towerMap.get(b);
+
+                double distA = calculateDistance(
+                        towerA.getLatitude(), towerA.getLongitude(),
+                        end.getLatitude(), end.getLongitude()
                 );
 
-                double newDistance = distanceSoFar.get(currentId) + segmentDistance;
+                double distB = calculateDistance(
+                        towerB.getLatitude(), towerB.getLongitude(),
+                        end.getLatitude(), end.getLongitude()
+                );
 
-                // If we haven't visited this node or we found a shorter path
-                if (!visited.contains(neighborId) || newDistance < distanceSoFar.getOrDefault(neighborId, Double.MAX_VALUE)) {
+                return Double.compare(distA, distB);
+            });
+
+            // Process all neighbors
+            for (String neighborId : neighbors) {
+                if (!visited.contains(neighborId)) {
                     visited.add(neighborId);
                     previous.put(neighborId, currentId);
-                    distanceSoFar.put(neighborId, newDistance);
-
-                    // Add to queue for processing
                     queue.add(neighborId);
                 }
             }
@@ -247,28 +224,6 @@ public class PathService {
         }
 
         return path;
-    }
-
-    private double getPathDistance(Map<String, String> previous, Map<String, TowerDto> towerMap,
-                                   String startId, String currentId) {
-        double totalDistance = 0;
-        String nodeId = currentId;
-
-        while (previous.containsKey(nodeId) && !nodeId.equals(startId)) {
-            String prevId = previous.get(nodeId);
-
-            TowerDto currentTower = towerMap.get(nodeId);
-            TowerDto prevTower = towerMap.get(prevId);
-
-            totalDistance += calculateDistance(
-                    prevTower.getLatitude(), prevTower.getLongitude(),
-                    currentTower.getLatitude(), currentTower.getLongitude()
-            );
-
-            nodeId = prevId;
-        }
-
-        return totalDistance;
     }
 
     private List<TowerDto> findPathByInterpolation(TowerDto start, TowerDto end, List<TowerDto> allTowers) {
