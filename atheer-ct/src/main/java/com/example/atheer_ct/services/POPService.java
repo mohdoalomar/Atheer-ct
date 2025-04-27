@@ -11,11 +11,11 @@ import java.util.stream.Collectors;
 @Service
 public class POPService {
 
-    private final PathService pathService;
+    private final OldPathService oldPathService;
     private final TowerRepository towerRepository;
 
-    public POPService(PathService pathService, TowerRepository towerRepository) {
-        this.pathService = pathService;
+    public POPService(OldPathService oldPathService, TowerRepository towerRepository) {
+        this.oldPathService = oldPathService;
         this.towerRepository = towerRepository;
     }
 
@@ -28,92 +28,11 @@ public class POPService {
      * @param destinationPoints List of destination points to connect to
      * @return Map containing the optimized paths and statistics
      */
-    public Map<String, Object> findOptimizedPOPPaths(double popLat, double popLon,
-                                                     List<Map<String, Double>> destinationPoints) {
-        Map<String, Object> result = new HashMap<>();
 
-        // Create a map to track all used towers across all paths
-        Map<String, TowerDto> allUsedTowers = new HashMap<>();
-
-        // Create virtual tower for POP point
-        TowerDto popTower = TowerDto.builder()
-                .tawalId("POP_VIRTUAL")
-                .siteName("Virtual POP Tower")
-                .latitude(popLat)
-                .longitude(popLon)
-                .build();
-
-        // Add POP tower to the used towers
-        allUsedTowers.put(getTowerId(popTower), popTower);
-
-        // Create a list to store information about all paths
-        List<Map<String, Object>> pathsInfo = new ArrayList<>();
-
-        // Process each destination
-        for (Map<String, Double> destination : destinationPoints) {
-            double destLat = destination.get("latitude");
-            double destLon = destination.get("longitude");
-
-            // Find shortest path to this destination
-            Map<String, Object> pathResult = pathService.findShortestPath(popLat, popLon, destLat, destLon);
-
-            if (pathResult.containsKey("path")) {
-                @SuppressWarnings("unchecked")
-                List<TowerDto> path = (List<TowerDto>) pathResult.get("path");
-
-                // Track towers used in this path
-                for (TowerDto tower : path) {
-                    String towerId = getTowerId(tower);
-                    if (!allUsedTowers.containsKey(towerId)) {
-                        allUsedTowers.put(towerId, tower);
-                    }
-                }
-
-                // Create info object for this path
-                Map<String, Object> pathInfo = new HashMap<>();
-                pathInfo.put("destination", Map.of(
-                        "latitude", destLat,
-                        "longitude", destLon
-                ));
-                pathInfo.put("path", path);
-                pathInfo.put("towerCount", path.size());
-                pathInfo.put("distance", calculateTotalPathDistance(path));
-
-                pathsInfo.add(pathInfo);
-            } else {
-                // Handle error for this destination
-                Map<String, Object> errorInfo = new HashMap<>();
-                errorInfo.put("destination", Map.of(
-                        "latitude", destLat,
-                        "longitude", destLon
-                ));
-                errorInfo.put("error", pathResult.get("error"));
-                pathsInfo.add(errorInfo);
-            }
-        }
-
-        // Calculate network statistics
-        int uniqueTowersUsed = allUsedTowers.size() - 1; // Subtract 1 for the POP tower
-        double totalDistance = pathsInfo.stream()
-                .filter(info -> info.containsKey("distance"))
-                .mapToDouble(info -> (Double) info.get("distance"))
-                .sum();
-
-        // Add results and statistics
-        result.put("paths", pathsInfo);
-        result.put("statistics", Map.of(
-                "uniqueTowersUsed", uniqueTowersUsed,
-                "totalDestinations", destinationPoints.size(),
-                "totalDistance", totalDistance,
-                "successfulPaths", pathsInfo.stream().filter(p -> !p.containsKey("error")).count()
-        ));
-
-        return result;
-    }
 
     /**
-     * Optimized version that creates a ring-like network structure connecting all destinations
-     * while minimizing the total tower count by using destinations as relay points
+     * Optimized version that creates a network structure connecting to all destinations
+     * while minimizing the total tower count, treating destinations as receivers only
      */
     public Map<String, Object> findMinimumTowerPOPPaths(double popLat, double popLon,
                                                         List<Map<String, Double>> destinationPoints) {
@@ -133,10 +52,112 @@ public class POPService {
                 .longitude(popLon)
                 .build();
 
-        // Create virtual towers for all destinations
+        // Quick reachability check without full path calculation
+        List<Map<String, Double>> reachableDestinations = new ArrayList<>();
+        List<Map<String, Object>> unreachableDestinations = new ArrayList<>();
+
+        final double MAX_TOWER_DISTANCE = 10.1;
+
+        // First, identify towers within range of the POP (do this once)
+        Set<TowerDto> towersWithinRangeOfPOP = new HashSet<>();
+        for (TowerDto tower : allTowers) {
+            double distFromPop = calculateDistance(
+                    popLat, popLon,
+                    tower.getLatitude(), tower.getLongitude()
+            );
+
+            if (distFromPop <= MAX_TOWER_DISTANCE) {
+                towersWithinRangeOfPOP.add(tower);
+            }
+        }
+
+        for (Map<String, Double> dest : destinationPoints) {
+            double destLat = dest.get("latitude");
+            double destLon = dest.get("longitude");
+
+            // STEP 1: Check if direct connection is possible
+            double directDistance = calculateDistance(popLat, popLon, destLat, destLon);
+            if (directDistance <= MAX_TOWER_DISTANCE) {
+                // Directly reachable
+                reachableDestinations.add(dest);
+                continue;
+            }
+
+            // STEP 2: Check if any single tower can connect POP to destination
+            boolean canReachWithOneTower = false;
+            for (TowerDto tower : towersWithinRangeOfPOP) {
+                double distToDest = calculateDistance(
+                        tower.getLatitude(), tower.getLongitude(),
+                        destLat, destLon
+                );
+
+                if (distToDest <= MAX_TOWER_DISTANCE) {
+                    canReachWithOneTower = true;
+                    break;
+                }
+            }
+
+            if (canReachWithOneTower) {
+                reachableDestinations.add(dest);
+                continue;
+            }
+
+            // STEP 3: Check if destination is within range of ANY tower
+            // This is different from Step 2 because we're checking all towers,
+            // not just those within range of the POP
+            boolean destWithinRangeOfAnyTower = false;
+            for (TowerDto tower : allTowers) {
+                // Skip towers we already checked in Step 2
+                if (towersWithinRangeOfPOP.contains(tower)) {
+                    continue;
+                }
+
+                double distToDest = calculateDistance(
+                        tower.getLatitude(), tower.getLongitude(),
+                        destLat, destLon
+                );
+
+                if (distToDest <= MAX_TOWER_DISTANCE) {
+                    destWithinRangeOfAnyTower = true;
+                    break;
+                }
+            }
+
+            // STEP 4: Do full path calculation only when needed
+            if (destWithinRangeOfAnyTower) {
+                // A tower can reach the destination, but we need to check if there's a full path
+                Map<String, Object> pathResult = oldPathService.findShortestPath(
+                        popLat, popLon, destLat, destLon
+                );
+
+                if (!pathResult.containsKey("error")) {
+                    reachableDestinations.add(dest);
+                } else {
+                    Map<String, Object> unreachableInfo = new HashMap<>();
+                    unreachableInfo.put("destination", dest);
+                    unreachableInfo.put("reason", pathResult.get("error"));
+                    unreachableDestinations.add(unreachableInfo);
+                }
+            } else {
+                // No tower can reach the destination, so it's definitely unreachable
+                Map<String, Object> unreachableInfo = new HashMap<>();
+                unreachableInfo.put("destination", dest);
+                unreachableInfo.put("reason", "Destination is not within range of any available tower");
+                unreachableDestinations.add(unreachableInfo);
+            }
+        }
+
+        // If no destinations are reachable, return early
+        if (reachableDestinations.isEmpty()) {
+            result.put("error", "None of the destination points are reachable.");
+            result.put("unreachableDestinations", unreachableDestinations);
+            return result;
+        }
+
+        // Create virtual towers for all reachable destinations
         List<TowerDto> destTowers = new ArrayList<>();
-        for (int i = 0; i < destinationPoints.size(); i++) {
-            Map<String, Double> dest = destinationPoints.get(i);
+        for (int i = 0; i < reachableDestinations.size(); i++) {
+            Map<String, Double> dest = reachableDestinations.get(i);
             TowerDto destTower = TowerDto.builder()
                     .tawalId("DEST_" + i + "_VIRTUAL")
                     .siteName("Virtual Destination Tower " + i)
@@ -146,123 +167,111 @@ public class POPService {
             destTowers.add(destTower);
         }
 
-        // Create combined list of all towers including destinations as potential intermediate towers
-        List<TowerDto> allPossibleTowers = new ArrayList<>();
-        allPossibleTowers.add(popTower);
-        allPossibleTowers.addAll(allTowers);
-        allPossibleTowers.addAll(destTowers);
-
-        // Create a network graph where edges represent possible connections
-        Map<String, Set<String>> networkGraph = buildNetworkGraph(allPossibleTowers);
-
-        // Map to keep track of all towers by ID
-        Map<String, TowerDto> towerMap = new HashMap<>();
-        for (TowerDto tower : allPossibleTowers) {
-            towerMap.put(getTowerId(tower), tower);
-        }
+        // Create combined list of all usable intermediate towers (POP + DB towers, NOT destinations)
+        List<TowerDto> intermediateNodes = new ArrayList<>();
+        intermediateNodes.add(popTower);
+        intermediateNodes.addAll(allTowers);
 
         // Collect the IDs of all destination towers for quick lookups
         Set<String> destTowerIds = destTowers.stream()
                 .map(this::getTowerId)
                 .collect(Collectors.toSet());
 
-        // Create a minimum spanning tree (MST) connecting all destinations
-        // This will form the basis of our ring-like network
-        Set<String> includedTowers = new HashSet<>();
+        // Create a list of all nodes (intermediate + destinations)
+        List<TowerDto> allNodes = new ArrayList<>(intermediateNodes);
+        allNodes.addAll(destTowers);
+
+        // Create a network graph where edges represent possible connections
+        // This graph treats destinations as normal nodes for connectivity calculation purposes
+        Map<String, Set<String>> fullNetworkGraph = buildNetworkGraph(allNodes);
+
+        // Map to keep track of all towers by ID
+        Map<String, TowerDto> towerMap = new HashMap<>();
+        for (TowerDto tower : allNodes) {
+            towerMap.put(getTowerId(tower), tower);
+        }
+
+        // Calculate the minimum set of intermediate towers needed to connect all destinations
+        // using a modified Steiner tree approach
+        Set<String> selectedTowers = findMinimumBackboneNetwork(
+                popTower,
+                destTowers,
+                intermediateNodes,
+                fullNetworkGraph,
+                towerMap
+        );
+
+        // Ensure POP is always included
+        selectedTowers.add(getTowerId(popTower));
+
+        // Create a subgraph containing only the selected intermediate towers (backbone network)
+        Map<String, Set<String>> backboneGraph = new HashMap<>();
+        for (String towerId : selectedTowers) {
+            backboneGraph.put(towerId, new HashSet<>());
+
+            for (String neighbor : fullNetworkGraph.get(towerId)) {
+                if (selectedTowers.contains(neighbor)) {
+                    backboneGraph.get(towerId).add(neighbor);
+                }
+            }
+        }
+
+        // For each destination, find the best path from POP through the backbone network
         Map<String, List<TowerDto>> optimizedPaths = new HashMap<>();
 
-        // First, create a complete graph between just the destinations
-        // to help us find the most efficient connections between them
-        List<EdgeWithWeight> allDestEdges = new ArrayList<>();
-        for (int i = 0; i < destTowers.size(); i++) {
-            TowerDto destA = destTowers.get(i);
-            String idA = getTowerId(destA);
-
-            for (int j = i + 1; j < destTowers.size(); j++) {
-                TowerDto destB = destTowers.get(j);
-                String idB = getTowerId(destB);
-
-                // Find the shortest path between these destinations
-                List<TowerDto> shortestPath = findShortestPath(destA, destB, networkGraph, towerMap);
-                double pathDistance = calculateTotalPathDistance(shortestPath);
-
-                allDestEdges.add(new EdgeWithWeight(idA, idB, pathDistance, shortestPath));
-            }
-
-            // Also add connections from POP to each destination
-            List<TowerDto> popToDestPath = findShortestPath(popTower, destA, networkGraph, towerMap);
-            double popPathDistance = calculateTotalPathDistance(popToDestPath);
-            allDestEdges.add(new EdgeWithWeight(getTowerId(popTower), idA, popPathDistance, popToDestPath));
-        }
-
-        // Sort all edges by weight
-        allDestEdges.sort(Comparator.comparingDouble(EdgeWithWeight::getWeight));
-
-        // Apply a modified Kruskal's algorithm to form a ring-like MST
-        // that connects all destinations and the POP
-        DisjointSet disjointSet = new DisjointSet();
-        disjointSet.makeSet(getTowerId(popTower));
-        for (TowerDto dest : destTowers) {
-            disjointSet.makeSet(getTowerId(dest));
-        }
-
-        // Track edges that form the MST
-        List<EdgeWithWeight> mstEdges = new ArrayList<>();
-
-        // First pass: build the MST
-        for (EdgeWithWeight edge : allDestEdges) {
-            if (!disjointSet.connected(edge.getSource(), edge.getTarget())) {
-                disjointSet.union(edge.getSource(), edge.getTarget());
-                mstEdges.add(edge);
-            }
-
-            // Stop once we have n-1 edges (for n nodes)
-            if (mstEdges.size() == destTowers.size()) {
-                break;
-            }
-        }
-
-        // Second pass: add extra edges to form loops (ring structure)
-        // This creates redundancy and more direct routes
-        int extraEdges = Math.min(3, destTowers.size() / 3); // Add some extra edges based on network size
-        int edgesAdded = 0;
-
-        for (EdgeWithWeight edge : allDestEdges) {
-            // Skip edges already in the MST
-            if (mstEdges.contains(edge)) {
-                continue;
-            }
-
-            // Add some strategic extra edges to form rings
-            // Focus on edges between destinations (not from POP)
-            if (edgesAdded < extraEdges &&
-                    destTowerIds.contains(edge.getSource()) &&
-                    destTowerIds.contains(edge.getTarget())) {
-                mstEdges.add(edge);
-                edgesAdded++;
-            }
-        }
-
-        // Now build the actual network from the MST edges
-        Set<String> networkTowers = new HashSet<>();
-        networkTowers.add(getTowerId(popTower)); // Always include POP
-
-        // Add all towers from the MST paths
-        for (EdgeWithWeight edge : mstEdges) {
-            for (TowerDto tower : edge.getPath()) {
-                networkTowers.add(getTowerId(tower));
-            }
-        }
-
-        // For each destination, find the shortest path from POP using only network towers
         for (TowerDto destTower : destTowers) {
             String destId = getTowerId(destTower);
-            List<TowerDto> path = findMstPath(popTower, destTower, networkGraph, towerMap, networkTowers);
-            optimizedPaths.put(destId, path);
-        }
 
-        // Store the full set of included towers
-        includedTowers = networkTowers;
+            // Find the best connecting point from backbone to this destination
+            String bestConnectingTower = null;
+            double shortestDistance = Double.MAX_VALUE;
+
+            for (String towerId : selectedTowers) {
+                TowerDto intermediateTower = towerMap.get(towerId);
+
+                double distance = calculateDistance(
+                        intermediateTower.getLatitude(), intermediateTower.getLongitude(),
+                        destTower.getLatitude(), destTower.getLongitude()
+                );
+
+                if (distance <= 10.1 && distance < shortestDistance) { // Within range
+                    shortestDistance = distance;
+                    bestConnectingTower = towerId;
+                }
+            }
+
+            if (bestConnectingTower != null) {
+                // Find path from POP to connecting tower through backbone
+                List<TowerDto> backbonePath = findShortestPath(
+                        popTower,
+                        towerMap.get(bestConnectingTower),
+                        backboneGraph,
+                        towerMap
+                );
+
+                // Add destination to the end
+                List<TowerDto> fullPath = new ArrayList<>(backbonePath);
+                fullPath.add(destTower);
+
+                optimizedPaths.put(destId, fullPath);
+            } else {
+                // No connecting tower found within range, try direct connection from POP
+                double directDistance = calculateDistance(
+                        popTower.getLatitude(), popTower.getLongitude(),
+                        destTower.getLatitude(), destTower.getLongitude()
+                );
+
+                if (directDistance <= 10.1) {
+                    optimizedPaths.put(destId, List.of(popTower, destTower));
+                } else {
+                    // Find a regular path as fallback
+                    List<TowerDto> fallbackPath = findShortestPath(
+                            popTower, destTower, fullNetworkGraph, towerMap
+                    );
+                    optimizedPaths.put(destId, fallbackPath);
+                }
+            }
+        }
 
         // Format the results
         List<Map<String, Object>> pathsInfo = new ArrayList<>();
@@ -283,10 +292,8 @@ public class POPService {
         }
 
         // Count unique intermediate towers used (excluding POP tower and destinations)
-        Set<String> uniqueIntermediateTowers = includedTowers.stream()
-                .filter(id -> !id.equals(getTowerId(popTower)) &&
-                        !destTowers.stream().anyMatch(dest -> getTowerId(dest).equals(id)))
-                .collect(Collectors.toSet());
+        Set<String> uniqueIntermediateTowers = new HashSet<>(selectedTowers);
+        uniqueIntermediateTowers.remove(getTowerId(popTower)); // Remove POP
 
         int uniqueTowersUsed = uniqueIntermediateTowers.size();
         double totalDistance = pathsInfo.stream()
@@ -296,191 +303,453 @@ public class POPService {
         result.put("paths", pathsInfo);
         result.put("statistics", Map.of(
                 "uniqueTowersUsed", uniqueTowersUsed,
-                "totalDestinations", destinationPoints.size(),
+                "totalDestinations", reachableDestinations.size(),
+                "unreachableDestinations", unreachableDestinations.size(),
                 "totalDistance", totalDistance,
-                "networkTopology", "ring"
+                "networkTopology", "tree"
         ));
+
+        // Add information about unreachable destinations to the result
+        if (!unreachableDestinations.isEmpty()) {
+            result.put("unreachableDestinations", unreachableDestinations);
+        }
 
         return result;
     }
 
     /**
-     * Helper class to represent an edge with weight and associated path
+     * Find the minimum set of intermediate towers needed to form a backbone network
+     * that can reach all destinations. Uses a greedy approach inspired by the
+     * Steiner Tree problem solution.
      */
-    private static class EdgeWithWeight {
-        private final String source;
-        private final String target;
-        private final double weight;
-        private final List<TowerDto> path;
+    private Set<String> findMinimumBackboneNetwork(
+            TowerDto popTower,
+            List<TowerDto> destTowers,
+            List<TowerDto> intermediateNodes,
+            Map<String, Set<String>> networkGraph,
+            Map<String, TowerDto> towerMap) {
 
-        public EdgeWithWeight(String source, String target, double weight, List<TowerDto> path) {
-            this.source = source;
-            this.target = target;
-            this.weight = weight;
-            this.path = path;
-        }
+        // Start with just the POP tower
+        Set<String> selectedTowers = new HashSet<>();
+        selectedTowers.add(getTowerId(popTower));
 
-        public String getSource() {
-            return source;
-        }
+        // Create a set of all destination IDs
+        Set<String> destIds = destTowers.stream()
+                .map(this::getTowerId)
+                .collect(Collectors.toSet());
 
-        public String getTarget() {
-            return target;
-        }
+        // Set of destinations that have been connected
+        Set<String> connectedDests = new HashSet<>();
 
-        public double getWeight() {
-            return weight;
-        }
+        // Map of shortest paths from any selected tower to each destination
+        Map<String, List<TowerDto>> shortestPathsToDestinations = new HashMap<>();
 
-        public List<TowerDto> getPath() {
-            return path;
-        }
+        // Keep adding towers until all destinations are connected
+        while (connectedDests.size() < destTowers.size()) {
+            // Find all possible paths from current selected towers to unconnected destinations
+            for (String towerId : selectedTowers) {
+                TowerDto sourceTower = towerMap.get(towerId);
 
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            EdgeWithWeight that = (EdgeWithWeight) o;
-            return (source.equals(that.source) && target.equals(that.target)) ||
-                    (source.equals(that.target) && target.equals(that.source));
-        }
+                for (TowerDto destTower : destTowers) {
+                    String destId = getTowerId(destTower);
+                    if (connectedDests.contains(destId)) {
+                        continue; // Skip already connected destinations
+                    }
 
-        @Override
-        public int hashCode() {
-            // Symmetric hash for undirected edges
-            return source.hashCode() + target.hashCode();
-        }
-    }
+                    // Check direct connection first
+                    double directDistance = calculateDistance(
+                            sourceTower.getLatitude(), sourceTower.getLongitude(),
+                            destTower.getLatitude(), destTower.getLongitude()
+                    );
 
-    /**
-     * Helper class for union-find algorithm (disjoint set)
-     */
-    private static class DisjointSet {
-        private final Map<String, String> parent = new HashMap<>();
-        private final Map<String, Integer> rank = new HashMap<>();
-
-        public void makeSet(String x) {
-            parent.put(x, x);
-            rank.put(x, 0);
-        }
-
-        public String find(String x) {
-            if (!parent.get(x).equals(x)) {
-                parent.put(x, find(parent.get(x))); // Path compression
-            }
-            return parent.get(x);
-        }
-
-        public void union(String x, String y) {
-            String rootX = find(x);
-            String rootY = find(y);
-
-            if (rootX.equals(rootY)) {
-                return;
+                    if (directDistance <= 10.1) {
+                        // Direct connection possible
+                        shortestPathsToDestinations.put(destId, List.of(sourceTower, destTower));
+                        connectedDests.add(destId);
+                    }
+                }
             }
 
-            // Union by rank
-            if (rank.get(rootX) < rank.get(rootY)) {
-                parent.put(rootX, rootY);
+            // If we connected all destinations directly, we're done
+            if (connectedDests.size() == destTowers.size()) {
+                break;
+            }
+
+            // Find the best intermediate tower to add to our network
+            TowerDto bestTower = null;
+            int mostNewConnections = 0;
+
+            for (TowerDto candidate : intermediateNodes) {
+                String candidateId = getTowerId(candidate);
+                if (selectedTowers.contains(candidateId)) {
+                    continue; // Skip already selected towers
+                }
+
+                // Add this candidate temporarily
+                selectedTowers.add(candidateId);
+
+                // Count how many new destinations could be connected
+                int newConnections = 0;
+                for (TowerDto destTower : destTowers) {
+                    String destId = getTowerId(destTower);
+                    if (connectedDests.contains(destId)) {
+                        continue; // Skip already connected destinations
+                    }
+
+                    boolean canConnect = false;
+                    // Check if this tower can connect to any selected tower
+                    for (String existingTower : selectedTowers) {
+                        if (networkGraph.get(existingTower).contains(candidateId)) {
+                            canConnect = true;
+                            break;
+                        }
+                    }
+
+                    if (canConnect) {
+                        // Check if this candidate can connect to the destination
+                        double distance = calculateDistance(
+                                candidate.getLatitude(), candidate.getLongitude(),
+                                destTower.getLatitude(), destTower.getLongitude()
+                        );
+
+                        if (distance <= 10.1) {
+                            newConnections++;
+                        }
+                    }
+                }
+
+                // Remove the candidate and see if it's the best so far
+                selectedTowers.remove(candidateId);
+                if (newConnections > mostNewConnections) {
+                    mostNewConnections = newConnections;
+                    bestTower = candidate;
+                }
+            }
+
+            // If we found a good tower, add it
+            if (bestTower != null) {
+                selectedTowers.add(getTowerId(bestTower));
+
+                // Update connected destinations
+                for (TowerDto destTower : destTowers) {
+                    String destId = getTowerId(destTower);
+                    if (connectedDests.contains(destId)) {
+                        continue;
+                    }
+
+                    double distance = calculateDistance(
+                            bestTower.getLatitude(), bestTower.getLongitude(),
+                            destTower.getLatitude(), destTower.getLongitude()
+                    );
+
+                    if (distance <= 10.1) {
+                        connectedDests.add(destId);
+                    }
+                }
             } else {
-                parent.put(rootY, rootX);
-                if (rank.get(rootX).equals(rank.get(rootY))) {
-                    rank.put(rootX, rank.get(rootX) + 1);
+                // If we didn't find any good tower, add the closest tower to any unconnected destination
+                double minDistance = Double.MAX_VALUE;
+                TowerDto closestTower = null;
+                String closestDestId = null;
+
+                for (TowerDto candidate : intermediateNodes) {
+                    String candidateId = getTowerId(candidate);
+                    if (selectedTowers.contains(candidateId)) {
+                        continue;
+                    }
+
+                    // Check if this tower can connect to any selected tower
+                    boolean canConnectToSelected = false;
+                    for (String existingTower : selectedTowers) {
+                        if (networkGraph.get(existingTower).contains(candidateId)) {
+                            canConnectToSelected = true;
+                            break;
+                        }
+                    }
+
+                    if (canConnectToSelected) {
+                        for (TowerDto destTower : destTowers) {
+                            String destId = getTowerId(destTower);
+                            if (connectedDests.contains(destId)) {
+                                continue;
+                            }
+
+                            double distance = calculateDistance(
+                                    candidate.getLatitude(), candidate.getLongitude(),
+                                    destTower.getLatitude(), destTower.getLongitude()
+                            );
+
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestTower = candidate;
+                                closestDestId = destId;
+                            }
+                        }
+                    }
+                }
+
+                if (closestTower != null) {
+                    selectedTowers.add(getTowerId(closestTower));
+                } else {
+                    // If we couldn't find any tower that connects, let's just pick the closest tower
+                    // to the POP that can reach any unconnected destination
+                    minDistance = Double.MAX_VALUE;
+
+                    for (TowerDto candidate : intermediateNodes) {
+                        String candidateId = getTowerId(candidate);
+                        if (selectedTowers.contains(candidateId)) {
+                            continue;
+                        }
+
+                        double distanceToPop = calculateDistance(
+                                popTower.getLatitude(), popTower.getLongitude(),
+                                candidate.getLatitude(), candidate.getLongitude()
+                        );
+
+                        if (distanceToPop <= 10.1 && distanceToPop < minDistance) {
+                            boolean canReachDest = false;
+
+                            for (TowerDto destTower : destTowers) {
+                                String destId = getTowerId(destTower);
+                                if (connectedDests.contains(destId)) {
+                                    continue;
+                                }
+
+                                double destDistance = calculateDistance(
+                                        candidate.getLatitude(), candidate.getLongitude(),
+                                        destTower.getLatitude(), destTower.getLongitude()
+                                );
+
+                                if (destDistance <= 10.1) {
+                                    canReachDest = true;
+                                    break;
+                                }
+                            }
+
+                            if (canReachDest) {
+                                minDistance = distanceToPop;
+                                closestTower = candidate;
+                            }
+                        }
+                    }
+
+                    if (closestTower != null) {
+                        selectedTowers.add(getTowerId(closestTower));
+                    } else {
+                        // If we still can't find any tower, just add all remaining destinations
+                        // to the connected set to break out of the loop
+                        for (TowerDto destTower : destTowers) {
+                            connectedDests.add(getTowerId(destTower));
+                        }
+                    }
                 }
             }
         }
 
-        public boolean connected(String x, String y) {
-            return find(x).equals(find(y));
-        }
+        // Connect the backbone network
+        ensureConnectedBackbone(selectedTowers, networkGraph, intermediateNodes, towerMap);
+
+        return selectedTowers;
     }
 
     /**
-     * Find the shortest path between two towers using only towers in the networkTowers set
+     * Ensure that all selected towers form a connected backbone network
      */
-    private List<TowerDto> findMstPath(TowerDto start, TowerDto end,
-                                       Map<String, Set<String>> graph,
-                                       Map<String, TowerDto> towerMap,
-                                       Set<String> networkTowers) {
-        // Maps for Dijkstra's algorithm
-        Map<String, String> previous = new HashMap<>();
-        Map<String, Double> distance = new HashMap<>();
+    private void ensureConnectedBackbone(
+            Set<String> selectedTowers,
+            Map<String, Set<String>> networkGraph,
+            List<TowerDto> intermediateNodes,
+            Map<String, TowerDto> towerMap) {
+
+        // Use a simple BFS to check connectivity
+        String startTower = selectedTowers.iterator().next();
         Set<String> visited = new HashSet<>();
+        Queue<String> queue = new LinkedList<>();
 
-        // Initialize
-        for (String towerId : graph.keySet()) {
-            // Only consider towers in our network
-            if (networkTowers.contains(towerId)) {
-                distance.put(towerId, Double.MAX_VALUE);
-            }
-        }
+        queue.add(startTower);
+        visited.add(startTower);
 
-        String startId = getTowerId(start);
-        String endId = getTowerId(end);
-
-        // Ensure start and end are in our distance map
-        distance.put(startId, 0.0);
-        distance.put(endId, Double.MAX_VALUE);
-
-        PriorityQueue<String> queue = new PriorityQueue<>(
-                Comparator.comparingDouble(distance::get)
-        );
-        queue.add(startId);
-
-        // Dijkstra's algorithm
         while (!queue.isEmpty()) {
             String current = queue.poll();
 
-            if (current.equals(endId)) {
-                break; // Found the destination
-            }
-
-            if (visited.contains(current)) {
-                continue;
-            }
-
-            visited.add(current);
-
-            // Process all neighbors (if they're in our network)
-            for (String neighbor : graph.get(current)) {
-                if (visited.contains(neighbor) || !networkTowers.contains(neighbor)) {
-                    continue;
-                }
-
-                TowerDto currentTower = towerMap.get(current);
-                TowerDto neighborTower = towerMap.get(neighbor);
-
-                double segmentDist = calculateDistance(
-                        currentTower.getLatitude(), currentTower.getLongitude(),
-                        neighborTower.getLatitude(), neighborTower.getLongitude()
-                );
-
-                double newDist = distance.get(current) + segmentDist;
-
-                if (newDist < distance.getOrDefault(neighbor, Double.MAX_VALUE)) {
-                    distance.put(neighbor, newDist);
-                    previous.put(neighbor, current);
+            for (String neighbor : networkGraph.get(current)) {
+                if (selectedTowers.contains(neighbor) && !visited.contains(neighbor)) {
+                    visited.add(neighbor);
                     queue.add(neighbor);
                 }
             }
         }
 
-        // Reconstruct the path
-        List<TowerDto> path = new ArrayList<>();
-        String current = endId;
+        // If not all towers are visited, we need to add more towers to connect them
+        if (visited.size() < selectedTowers.size()) {
+            // Identify disconnected components
+            List<Set<String>> components = new ArrayList<>();
+            Set<String> unvisited = new HashSet<>(selectedTowers);
+            unvisited.removeAll(visited);
 
-        // If no path found
-        if (!previous.containsKey(endId) && !startId.equals(endId)) {
-            return List.of(start, end); // Return direct connection as fallback
+            components.add(visited);
+
+            while (!unvisited.isEmpty()) {
+                String startNode = unvisited.iterator().next();
+                Set<String> component = new HashSet<>();
+                Queue<String> componentQueue = new LinkedList<>();
+
+                componentQueue.add(startNode);
+                component.add(startNode);
+                unvisited.remove(startNode);
+
+                while (!componentQueue.isEmpty()) {
+                    String current = componentQueue.poll();
+
+                    for (String neighbor : networkGraph.get(current)) {
+                        if (selectedTowers.contains(neighbor) &&
+                                !component.contains(neighbor) &&
+                                unvisited.contains(neighbor)) {
+                            component.add(neighbor);
+                            unvisited.remove(neighbor);
+                            componentQueue.add(neighbor);
+                        }
+                    }
+                }
+
+                components.add(component);
+            }
+
+            // Connect components by adding intermediate towers
+            for (int i = 0; i < components.size() - 1; i++) {
+                Set<String> comp1 = components.get(i);
+                Set<String> comp2 = components.get(i + 1);
+
+                // Find the best tower to connect these components
+                TowerDto bestConnector = null;
+                double minTotalDistance = Double.MAX_VALUE;
+
+                for (TowerDto candidate : intermediateNodes) {
+                    String candidateId = getTowerId(candidate);
+                    if (selectedTowers.contains(candidateId)) {
+                        continue; // Skip already selected towers
+                    }
+
+                    // Check if this candidate can connect the components
+                    boolean canConnectComp1 = false;
+                    boolean canConnectComp2 = false;
+                    double minDistComp1 = Double.MAX_VALUE;
+                    double minDistComp2 = Double.MAX_VALUE;
+
+                    for (String towerId : comp1) {
+                        if (networkGraph.get(towerId).contains(candidateId)) {
+                            canConnectComp1 = true;
+                            double dist = calculateDistance(
+                                    candidate.getLatitude(), candidate.getLongitude(),
+                                    towerMap.get(towerId).getLatitude(), towerMap.get(towerId).getLongitude()
+                            );
+                            minDistComp1 = Math.min(minDistComp1, dist);
+                        }
+                    }
+
+                    for (String towerId : comp2) {
+                        if (networkGraph.get(towerId).contains(candidateId)) {
+                            canConnectComp2 = true;
+                            double dist = calculateDistance(
+                                    candidate.getLatitude(), candidate.getLongitude(),
+                                    towerMap.get(towerId).getLatitude(), towerMap.get(towerId).getLongitude()
+                            );
+                            minDistComp2 = Math.min(minDistComp2, dist);
+                        }
+                    }
+
+                    if (canConnectComp1 && canConnectComp2) {
+                        double totalDist = minDistComp1 + minDistComp2;
+                        if (totalDist < minTotalDistance) {
+                            minTotalDistance = totalDist;
+                            bestConnector = candidate;
+                        }
+                    }
+                }
+
+                if (bestConnector != null) {
+                    selectedTowers.add(getTowerId(bestConnector));
+                } else {
+                    // If no single tower can connect them, use two towers in sequence
+                    TowerDto bestFirst = null;
+                    TowerDto bestSecond = null;
+                    minTotalDistance = Double.MAX_VALUE;
+
+                    for (TowerDto first : intermediateNodes) {
+                        String firstId = getTowerId(first);
+                        if (selectedTowers.contains(firstId)) {
+                            continue;
+                        }
+
+                        boolean canConnectComp1 = false;
+                        for (String towerId : comp1) {
+                            if (networkGraph.get(towerId).contains(firstId)) {
+                                canConnectComp1 = true;
+                                break;
+                            }
+                        }
+
+                        if (canConnectComp1) {
+                            for (TowerDto second : intermediateNodes) {
+                                String secondId = getTowerId(second);
+                                if (selectedTowers.contains(secondId) || secondId.equals(firstId)) {
+                                    continue;
+                                }
+
+                                if (networkGraph.get(firstId).contains(secondId)) {
+                                    boolean canConnectComp2 = false;
+                                    for (String towerId : comp2) {
+                                        if (networkGraph.get(towerId).contains(secondId)) {
+                                            canConnectComp2 = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (canConnectComp2) {
+                                        // We found a valid pair
+                                        double firstDist = Double.MAX_VALUE;
+                                        double secondDist = Double.MAX_VALUE;
+
+                                        for (String towerId : comp1) {
+                                            double dist = calculateDistance(
+                                                    first.getLatitude(), first.getLongitude(),
+                                                    towerMap.get(towerId).getLatitude(), towerMap.get(towerId).getLongitude()
+                                            );
+                                            firstDist = Math.min(firstDist, dist);
+                                        }
+
+                                        for (String towerId : comp2) {
+                                            double dist = calculateDistance(
+                                                    second.getLatitude(), second.getLongitude(),
+                                                    towerMap.get(towerId).getLatitude(), towerMap.get(towerId).getLongitude()
+                                            );
+                                            secondDist = Math.min(secondDist, dist);
+                                        }
+
+                                        double middleDist = calculateDistance(
+                                                first.getLatitude(), first.getLongitude(),
+                                                second.getLatitude(), second.getLongitude()
+                                        );
+
+                                        double totalDist = firstDist + middleDist + secondDist;
+                                        if (totalDist < minTotalDistance) {
+                                            minTotalDistance = totalDist;
+                                            bestFirst = first;
+                                            bestSecond = second;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (bestFirst != null && bestSecond != null) {
+                        selectedTowers.add(getTowerId(bestFirst));
+                        selectedTowers.add(getTowerId(bestSecond));
+                    }
+                }
+            }
         }
-
-        // Build path from end to start
-        while (current != null) {
-            path.add(0, towerMap.get(current)); // Add to beginning of list
-            current = previous.get(current);     // Move to previous tower
-        }
-
-        return path;
     }
 
     /**
@@ -523,7 +792,7 @@ public class POPService {
             visited.add(current);
 
             // Process all neighbors
-            for (String neighbor : graph.get(current)) {
+            for (String neighbor : graph.getOrDefault(current, Collections.emptySet())) {
                 if (visited.contains(neighbor)) {
                     continue;
                 }
@@ -538,7 +807,7 @@ public class POPService {
 
                 double newDist = distance.get(current) + segmentDist;
 
-                if (newDist < distance.get(neighbor)) {
+                if (newDist < distance.getOrDefault(neighbor, Double.MAX_VALUE)) {
                     distance.put(neighbor, newDist);
                     previous.put(neighbor, current);
                     queue.add(neighbor);
@@ -562,56 +831,6 @@ public class POPService {
         }
 
         return path;
-    }
-
-    /**
-     * Counts how many destinations are used as relay points for other destinations
-     * Note: Modified to identify destinations by checking against the destTowers list
-     */
-    private int countDestinationsUsedAsRelays(Map<String, List<TowerDto>> paths, List<TowerDto> destTowers) {
-        Set<String> relayDestinations = new HashSet<>();
-
-        // Create a set of destination tower IDs for faster lookup
-        Set<String> destTowerIds = destTowers.stream()
-                .map(this::getTowerId)
-                .collect(Collectors.toSet());
-
-        // For each path
-        for (List<TowerDto> path : paths.values()) {
-            // Check each tower in the path (except first and last)
-            for (int i = 1; i < path.size() - 1; i++) {
-                TowerDto tower = path.get(i);
-                String towerId = getTowerId(tower);
-
-                // If this intermediate tower is a destination
-                if (destTowerIds.contains(towerId)) {
-                    relayDestinations.add(towerId);
-                }
-            }
-        }
-
-        return relayDestinations.size();
-    }
-
-    /**
-     * Find destinations that can be directly connected to the POP
-     */
-    private Map<String, TowerDto> findDirectConnections(TowerDto popTower, List<TowerDto> destTowers) {
-        Map<String, TowerDto> directConnections = new HashMap<>();
-        final double MAX_TOWER_DISTANCE = 10.1;
-
-        for (TowerDto destTower : destTowers) {
-            double distance = calculateDistance(
-                    popTower.getLatitude(), popTower.getLongitude(),
-                    destTower.getLatitude(), destTower.getLongitude()
-            );
-
-            if (distance <= MAX_TOWER_DISTANCE) {
-                directConnections.put(getTowerId(destTower), destTower);
-            }
-        }
-
-        return directConnections;
     }
 
     /**
@@ -651,106 +870,6 @@ public class POPService {
         }
 
         return graph;
-    }
-
-    /**
-     * Enhanced path finding that can use destinations as relay points
-     */
-    private List<TowerDto> findEnhancedPath(TowerDto start, TowerDto end,
-                                            Map<String, Set<String>> graph,
-                                            Map<String, TowerDto> towerMap,
-                                            Set<String> includedTowers) {
-        // Maps for Dijkstra's algorithm
-        Map<String, String> previous = new HashMap<>();
-        Map<String, Double> distance = new HashMap<>();
-        Set<String> visited = new HashSet<>();
-
-        // Initialize
-        for (String towerId : graph.keySet()) {
-            distance.put(towerId, Double.MAX_VALUE);
-        }
-
-        String startId = getTowerId(start);
-        String endId = getTowerId(end);
-        distance.put(startId, 0.0);
-
-        // Priority queue with modified comparator that:
-        // 1. Prefers included towers
-        // 2. Gives slight preference to destination towers that can act as relays
-        PriorityQueue<String> queue = new PriorityQueue<>((a, b) -> {
-            // Get base distances
-            double distA = distance.get(a);
-            double distB = distance.get(b);
-
-            // Apply preference for included towers (small bonus)
-            if (includedTowers.contains(a) && !includedTowers.contains(b)) {
-                distA -= 0.5; // Make included towers slightly more attractive
-            } else if (!includedTowers.contains(a) && includedTowers.contains(b)) {
-                distB -= 0.5;
-            }
-
-            // No special preference for destination towers as relays
-            // All towers are treated equally based on their position in the network
-
-            return Double.compare(distA, distB);
-        });
-
-        queue.add(startId);
-
-        // Dijkstra's algorithm
-        while (!queue.isEmpty()) {
-            String current = queue.poll();
-
-            if (current.equals(endId)) {
-                break; // Found the destination
-            }
-
-            if (visited.contains(current)) {
-                continue;
-            }
-
-            visited.add(current);
-
-            // Process all neighbors
-            for (String neighbor : graph.get(current)) {
-                if (visited.contains(neighbor)) {
-                    continue;
-                }
-
-                TowerDto currentTower = towerMap.get(current);
-                TowerDto neighborTower = towerMap.get(neighbor);
-
-                double segmentDist = calculateDistance(
-                        currentTower.getLatitude(), currentTower.getLongitude(),
-                        neighborTower.getLatitude(), neighborTower.getLongitude()
-                );
-
-                double newDist = distance.get(current) + segmentDist;
-
-                if (newDist < distance.get(neighbor)) {
-                    distance.put(neighbor, newDist);
-                    previous.put(neighbor, current);
-                    queue.add(neighbor);
-                }
-            }
-        }
-
-        // Reconstruct the path
-        List<TowerDto> path = new ArrayList<>();
-        String current = endId;
-
-        // If no path found
-        if (!previous.containsKey(endId) && !startId.equals(endId)) {
-            return List.of(start, end); // Return direct connection as fallback
-        }
-
-        // Build path from end to start
-        while (current != null) {
-            path.add(0, towerMap.get(current)); // Add to beginning of list
-            current = previous.get(current);     // Move to previous tower
-        }
-
-        return path;
     }
 
     /**
