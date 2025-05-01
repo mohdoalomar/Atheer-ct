@@ -501,7 +501,7 @@ function POPMapPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
-  const [optimizeTowers, setOptimizeTowers] = useState(true);
+
   
   // Update map bounds when network data changes
   useEffect(() => {
@@ -545,7 +545,7 @@ function POPMapPage() {
       
       // Make API call
       const response = await axios.post(
-        `${API_BASE_URL}/pop?popLat=${popPoint.lat.toFixed(7)}&popLon=${popPoint.lng.toFixed(7)}&optimizeTowers=${optimizeTowers}`,
+        `${API_BASE_URL}/pop?popLat=${popPoint.lat.toFixed(7)}&popLon=${popPoint.lng.toFixed(7)}`,
         destinationList,
         {
           withCredentials: true, 
@@ -623,7 +623,7 @@ function POPMapPage() {
   // Add a destination point
   const addDestination = (point) => {
     setDestinations([...destinations, point]);
-    setAddingDestination(false);
+
   };
   
   // Remove a destination point
@@ -659,7 +659,7 @@ function POPMapPage() {
     
     try {
       const response = await axios.get(
-        `${API_BASE_URL}/example/alhofuf?optimizeTowers=${optimizeTowers}`
+        `${API_BASE_URL}/example/alhofuf`
       );
       
       if (response.data.error) {
@@ -878,25 +878,7 @@ function POPMapPage() {
                 </div>
               )}
               
-              {/* Optimization toggle */}
-              <div className="mb-4">
-                <div className="flex items-center">
-                  <input 
-                    type="checkbox" 
-                    id="optimizeTowers" 
-                    checked={optimizeTowers}
-                    onChange={() => setOptimizeTowers(!optimizeTowers)}
-                    className="mr-2"
-                  />
-                  <label htmlFor="optimizeTowers" className="text-sm text-gray-700">
-                    تحسين عدد الأبراج المستخدمة
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  سيؤدي ذلك إلى تقليل عدد الأبراج المستخدمة عن طريق إعادة استخدام الأبراج عبر المسارات المختلفة
-                </p>
-              </div>
-              
+           
               {/* Generate network button */}
               <button 
                 className="coordinate-button green w-full flex items-center justify-center"
