@@ -436,8 +436,14 @@ function TowerMapPage() {
         
         try {
           const response = await axios.get(
-            `${API_BASE_URL}/findpath?startLat=${startPoint.lat.toFixed(7)}&startLon=${startPoint.lng.toFixed(7)}&endLat=${endPoint.lat.toFixed(7)}&endLon=${endPoint.lng.toFixed(7)}`
-          );
+            `${API_BASE_URL}/oldfindpath?startLat=${startPoint.lat.toFixed(7)}&startLon=${startPoint.lng.toFixed(7)}&endLat=${endPoint.lat.toFixed(7)}&endLon=${endPoint.lng.toFixed(7)}`
+          ,
+          {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
           if(response.data.error) {
            setError(response.data.error);
           }
@@ -483,7 +489,7 @@ function TowerMapPage() {
   // Update URL when coordinates change
   useEffect(() => {
     if (startPoint && endPoint) {
-      const url = `localhost:8081/findpath?startLat=${startPoint.lat.toFixed(7)}&startLon=${startPoint.lng.toFixed(7)}&endLat=${endPoint.lat.toFixed(7)}&endLon=${endPoint.lng.toFixed(7)}`;
+      const url = API_BASE_URL+`/findpath?startLat=${startPoint.lat.toFixed(7)}&startLon=${startPoint.lng.toFixed(7)}&endLat=${endPoint.lat.toFixed(7)}&endLon=${endPoint.lng.toFixed(7)}`;
       setCoordUrl(url);
     } else {
       setCoordUrl('');

@@ -4,11 +4,10 @@ import { MapContainer, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import axios from 'axios';
-import API_BASE_URL from '../../api/config';
-
+import API_BASE_URL from '../api/config';
 // Import Components
 import MapStyles from './MapStyles';
-import CustomIcons from './CustomIcons';
+
 import ZoomControl from './ZoomControl';
 import CoordinateSelector from './CoordinateSelector';
 import LocationComponent from './LocationComponent';
@@ -16,9 +15,9 @@ import MapMarkers from './MapMarkers';
 import MapPaths from './MapPaths';
 import TowerList from './TowerList';
 import TowerDetails from './TowerDetails';
-import CoordinateInput from './CoordinateInput';
+import CoordinateInput from './CoordinateSelection';
 import ErrorAlert from './ErrorAlert';
-import DistanceIndicator from './DistanceIndicator';
+
 
 // Fix Leaflet default icon issue
 delete L.Icon.Default.prototype._getIconUrl;
@@ -81,7 +80,12 @@ function TowerMapPage() {
         try {
           const response = await axios.get(
             `${API_BASE_URL}/findpath?startLat=${startPoint.lat.toFixed(7)}&startLon=${startPoint.lng.toFixed(7)}&endLat=${endPoint.lat.toFixed(7)}&endLon=${endPoint.lng.toFixed(7)}`
-          );
+          , {
+            withCredentials: true, 
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
           if(response.data.error) {
             setError(response.data.error);
           }
@@ -127,7 +131,7 @@ function TowerMapPage() {
   // Update URL when coordinates change
   useEffect(() => {
     if (startPoint && endPoint) {
-      const url = `localhost:8081/findpath?startLat=${startPoint.lat.toFixed(7)}&startLon=${startPoint.lng.toFixed(7)}&endLat=${endPoint.lat.toFixed(7)}&endLon=${endPoint.lng.toFixed(7)}`;
+      const url = API_BASE_URL+`/findpath?startLat=${startPoint.lat.toFixed(7)}&startLon=${startPoint.lng.toFixed(7)}&endLat=${endPoint.lat.toFixed(7)}&endLon=${endPoint.lng.toFixed(7)}`;
       setCoordUrl(url);
     } else {
       setCoordUrl('');

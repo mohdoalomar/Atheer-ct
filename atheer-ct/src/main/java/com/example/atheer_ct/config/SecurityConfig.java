@@ -33,11 +33,11 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-//                        .requestMatchers("/api/users/register").permitAll()
-//                        .requestMatchers("/api/auth/**").permitAll()
-//                        .requestMatchers("/login").permitAll()
-//                        .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll())
+                        .requestMatchers("/api/users/register").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/login").permitAll()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginProcessingUrl("/api/auth/login")
                         .usernameParameter("username")

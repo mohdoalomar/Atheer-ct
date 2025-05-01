@@ -1,0 +1,220 @@
+import { createContext, useContext, useState } from "react";
+
+const LanguageContext = createContext();
+
+export const translations = {
+  en: {
+    register: {
+      title: "Create your account",
+      username: "Username",
+      email: "Email address",
+      firstName: "First Name",
+      lastName: "Last Name",
+      password: "Password",
+      confirmPassword: "Confirm Password",
+      register: "Register",
+      alreadyHaveAccount: "Already have an account?",
+      signIn: "Sign in",
+      passwordsNoMatch: "Passwords do not match",
+      registrationSuccess: "Registration successful! Redirecting to login...",
+      registrationFailed: "Registration failed. Please try again."
+    },
+    login: {
+      title: "Sign in to your account",
+      username: "Username",
+      password: "Password",
+      signIn: "Sign in",
+      dontHaveAccount: "Don't have an account?",
+      registerHere: "Register here",
+      loginFailed: "Login failed. Please try again."
+    },
+    joinFamily: {
+      title: "Family Circle",
+      welcome: "Welcome",
+      subtitle: "Join an existing family with an invitation token or create your own.",
+      joinTitle: "Join with Invitation",
+      invitationToken: "Invitation Token",
+      tokenPlaceholder: "Paste invitation token here",
+      tokenDescription: "This is a unique token shared by a family member",
+      joinButton: "Join Family",
+      joiningButton: "Joining...",
+      createTitle: "Create New Family",
+      createDescription: "Start a new family group and invite others to join you.",
+      createButton: "Create a New Family",
+      creatingButton: "Creating...",
+      orDivider: "OR",
+      modalTitle: "Create Your Family",
+      familyName: "Family Name",
+      familyNamePlaceholder: "Enter family name",
+      cancelButton: "Cancel",
+      createModalButton: "Create",
+      loadingText: "Checking family status...",
+      invalidToken: "This invitation token is invalid or has expired",
+      missingToken: "Please enter a family invitation token",
+      missingName: "Please enter a family name",
+      joinFailed: "Failed to join family. Please try again.",
+      createFailed: "Failed to create family. Please try again."
+    },
+    groceryList: {
+      title: "Grocery List",
+      welcome: "Logged in as",
+      inviteButton: "Invite Family Members",
+      logoutButton: "Logout",
+      addPlaceholder: "Add new item...",
+      addButton: "Add",
+      addingButton: "Adding...",
+      suggestionsTitle: "Suggestions:",
+      loadingText: "Loading your grocery list...",
+      emptyListTitle: "Your grocery list is empty",
+      emptyListDescription: "Add some items above to get started!",
+      itemsTitle: "Your Items",
+      toBuyTitle: "To Buy",
+      purchasedTitle: "Purchased",
+      deleteButton: "Delete",
+      inviteModalTitle: "Family Invitation Link",
+      copyButton: "Copy",
+      copiedText: "Copied to clipboard!",
+      inviteDescription: "Share this link with family members so they can join your grocery list.",
+      closeButton: "Close",
+      failedToLoad: "Failed to load data. Please try again.",
+      failedToAdd: "Failed to add item. Please try again.",
+      failedToUpdate: "Failed to update item. Please try again.",
+      failedToDelete: "Failed to delete item. Please try again.",
+      failedToInvite: "Failed to generate invitation link. Please try again.",
+      aiToggleLabel: 'Smart Suggestions',
+      aiEnabledText: 'AI will suggest items after every 3 additions'
+    },
+    invitation: {
+      loading: "Joining Family...",
+      loadingDescription: "Please wait while we process your invitation.",
+      errorTitle: "Invitation Error",
+      goToFamilyButton: "Go to Family Page",
+      successTitle: "Success!",
+      successDescription: "You have successfully joined the family:",
+      redirectInfo: "You'll be redirected to the grocery list in a moment...",
+      goToListButton: "Go to Grocery List",
+      confirmTitle: "Family Invitation",
+      welcome: "Welcome",
+      joinConfirmation: "Join Family?",
+      joinPrompt: "You've been invited to join",
+      memberCount: "Members",
+      joinDescription: "By joining this family, you'll be able to share grocery lists with other family members.",
+      declineButton: "Decline",
+      joinButton: "Join Family"
+    },
+    switchLang: "ع"
+  },
+  ar: {
+    register: {
+      title: "إنشاء حساب جديد",
+      username: "اسم المستخدم",
+      email: "البريد الإلكتروني",
+      firstName: "الاسم الأول",
+      lastName: "اسم العائلة",
+      password: "كلمة المرور",
+      confirmPassword: "تأكيد كلمة المرور",
+      register: "تسجيل",
+      alreadyHaveAccount: "لديك حساب بالفعل؟",
+      signIn: "تسجيل الدخول",
+      passwordsNoMatch: "كلمتا المرور غير متطابقتين",
+      registrationSuccess: "تم التسجيل بنجاح! سيتم تحويلك لتسجيل الدخول...",
+      registrationFailed: "فشل التسجيل. حاول مرة أخرى."
+    },
+    login: {
+      title: "تسجيل الدخول إلى حسابك",
+      username: "اسم المستخدم",
+      password: "كلمة المرور",
+      signIn: "تسجيل الدخول",
+      dontHaveAccount: "ليس لديك حساب؟",
+      registerHere: "سجل هنا",
+      loginFailed: "فشل تسجيل الدخول. حاول مرة أخرى."
+    },
+    joinFamily: {
+      title: "دائرة العائلة",
+      welcome: "مرحباً",
+      subtitle: "انضم إلى عائلة موجودة برمز دعوة أو أنشئ عائلتك الخاصة.",
+      joinTitle: "الانضمام بواسطة دعوة",
+      invitationToken: "رمز الدعوة",
+      tokenPlaceholder: "الصق رمز الدعوة هنا",
+      tokenDescription: "هذا رمز فريد تمت مشاركته بواسطة أحد أفراد العائلة",
+      joinButton: "الانضمام للعائلة",
+      joiningButton: "جاري الانضمام...",
+      createTitle: "إنشاء عائلة جديدة",
+      createDescription: "ابدأ مجموعة عائلية جديدة وادعُ الآخرين للانضمام إليك.",
+      createButton: "إنشاء عائلة جديدة",
+      creatingButton: "جاري الإنشاء...",
+      orDivider: "أو",
+      modalTitle: "إنشاء عائلتك",
+      familyName: "اسم العائلة",
+      familyNamePlaceholder: "أدخل اسم العائلة",
+      cancelButton: "إلغاء",
+      createModalButton: "إنشاء",
+      loadingText: "جاري التحقق من حالة العائلة...",
+      invalidToken: "رمز الدعوة هذا غير صالح أو انتهت صلاحيته",
+      missingToken: "الرجاء إدخال رمز دعوة العائلة",
+      missingName: "الرجاء إدخال اسم العائلة",
+      joinFailed: "فشل الانضمام للعائلة. حاول مرة أخرى.",
+      createFailed: "فشل إنشاء العائلة. حاول مرة أخرى."
+    },
+    groceryList: {
+      title: "قائمة التسوق",
+      welcome: "تم تسجيل الدخول باسم",
+      inviteButton: "دعوة أفراد العائلة",
+      logoutButton: "تسجيل الخروج",
+      addPlaceholder: "أضف عنصراً جديداً...",
+      addButton: "إضافة",
+      addingButton: "جاري الإضافة...",
+      suggestionsTitle: "اقتراحات:",
+      loadingText: "جاري تحميل قائمة التسوق الخاصة بك...",
+      emptyListTitle: "قائمة التسوق فارغة",
+      emptyListDescription: "أضف بعض العناصر أعلاه للبدء!",
+      itemsTitle: "العناصر الخاصة بك",
+      toBuyTitle: "للشراء",
+      purchasedTitle: "تم شراؤها",
+      deleteButton: "حذف",
+      inviteModalTitle: "رابط دعوة العائلة",
+      copyButton: "نسخ",
+      copiedText: "تم النسخ إلى الحافظة!",
+      inviteDescription: "شارك هذا الرابط مع أفراد العائلة ليتمكنوا من الانضمام إلى قائمة التسوق الخاصة بك.",
+      closeButton: "إغلاق",
+      failedToLoad: "فشل تحميل البيانات. حاول مرة أخرى.",
+      failedToAdd: "فشل إضافة العنصر. حاول مرة أخرى.",
+      failedToUpdate: "فشل تحديث العنصر. حاول مرة أخرى.",
+      failedToDelete: "فشل حذف العنصر. حاول مرة أخرى.",
+      failedToInvite: "فشل إنشاء رابط الدعوة. حاول مرة أخرى.",
+      aiToggleLabel: 'الاقتراحات الذكية',
+      aiEnabledText: 'سيقوم الذكاء الاصطناعي باقتراح عناصر بعد كل 3 إضافات'
+    },
+    invitation: {
+      loading: "جاري الانضمام للعائلة...",
+      loadingDescription: "يرجى الانتظار أثناء معالجة دعوتك.",
+      errorTitle: "خطأ في الدعوة",
+      goToFamilyButton: "الذهاب إلى صفحة العائلة",
+      successTitle: "تم بنجاح!",
+      successDescription: "لقد انضممت بنجاح إلى العائلة:",
+      redirectInfo: "سيتم توجيهك إلى قائمة التسوق في لحظات...",
+      goToListButton: "الذهاب إلى قائمة التسوق",
+      confirmTitle: "دعوة العائلة",
+      welcome: "مرحباً",
+      joinConfirmation: "الانضمام للعائلة؟",
+      joinPrompt: "لقد تمت دعوتك للانضمام إلى",
+      memberCount: "الأعضاء",
+      joinDescription: "بالانضمام إلى هذه العائلة، ستتمكن من مشاركة قوائم التسوق مع أفراد العائلة الآخرين.",
+      declineButton: "رفض",
+      joinButton: "انضمام للعائلة"
+    },
+    switchLang: "E"
+  }
+};
+
+export const LanguageProvider = ({ children }) => {
+  const [language, setLanguage] = useState("ar");
+  const toggleLanguage = () => setLanguage((prev) => (prev === "en" ? "ar" : "en"));
+  return (
+    <LanguageContext.Provider value={{ language, toggleLanguage, translations: translations[language] }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+};
+
+export const useLanguage = () => useContext(LanguageContext);

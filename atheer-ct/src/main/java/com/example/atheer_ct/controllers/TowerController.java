@@ -54,12 +54,7 @@ public class TowerController {
         try {
             Map<String, Object> result;
 
-            if (optimizeTowers) {
                 result = popService.findMinimumTowerPOPPaths(popLat, popLon, destinations);
-            } else {
-
-                result = popService.findOptimizedPOPPaths(popLat, popLon, destinations);
-            }
 
             return ResponseEntity.ok(result);
         } catch (Exception e) {
@@ -129,13 +124,9 @@ public class TowerController {
 
             Map<String, Object> result;
 
-            if (optimizeTowers) {
+
                 // Use the advanced minimum tower optimization
                 result = popService.findMinimumTowerPOPPaths(popLat, popLon, destinations);
-            } else {
-                // Use the simpler approach
-                result = popService.findOptimizedPOPPaths(popLat, popLon, destinations);
-            }
 
             // Add the POP location to the result for reference
             result.put("pop", Map.of(

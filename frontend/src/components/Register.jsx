@@ -41,7 +41,9 @@ const Register = () => {
     }
     try {
       const { confirmPassword, ...registrationData } = userData;
-      await axios.post(API_BASE_URL+'/api/users/register', registrationData);
+      await axios.post(API_BASE_URL+'/api/users/register', registrationData,
+        
+      );
       setSuccess(translations.register.registrationSuccess);
       setShowSuccess(true);
       setTimeout(() => {
