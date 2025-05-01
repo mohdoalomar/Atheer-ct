@@ -71,7 +71,9 @@ const customStyles = `
   filter: hue-rotate(60deg) brightness(1.2);
 }
 
+/* Fix for animated dash lines */
 .pop-path {
+  stroke-dasharray: 5, 8;
   animation: dash 25s linear infinite;
 }
 
@@ -81,6 +83,9 @@ const customStyles = `
 }
 
 @keyframes dash {
+  from {
+    stroke-dashoffset: 0;
+  }
   to {
     stroke-dashoffset: 1000;
   }
@@ -402,17 +407,31 @@ function ZoomControl({ networkData }) {
 
   return (
     <div className="absolute top-4 right-4 z-[1000] custom-zoom-controls">
-      <button onClick={zoomIn} title="تكبير">
+      <button onClick={zoomIn} title="<bdi>تكبير</bdi>">
         <ZoomIn className="w-5 h-5" />
       </button>
-      <button onClick={zoomOut} title="تصغير">
+      <button onClick={zoomOut} title="<bdi>تصغير</bdi>">
         <ZoomOut className="w-5 h-5" />
       </button>
-      <button onClick={centerOnNetwork} title="إظهار الشبكة بالكامل">
+      <button onClick={centerOnNetwork} title="<bdi>إظهار الشبكة بالكامل</bdi>">
         <RefreshCw className="w-5 h-5" />
       </button>
     </div>
   );
+}
+
+// Custom map click handler for POP selection
+function POPSelector({ active, setPOPPoint }) {
+  useMapEvents({
+    click(e) {
+      if (!active) return;
+      
+      const { lat, lng } = e.latlng;
+      setPOPPoint({ lat, lng });
+    },
+  });
+
+  return null;
 }
 
 // Custom map click handler for destination selection
@@ -477,6 +496,7 @@ function POPMapPage() {
   const [popPoint, setPOPPoint] = useState(null);
   const [destinations, setDestinations] = useState([]);
   const [addingDestination, setAddingDestination] = useState(false);
+  const [addingPOP, setAddingPOP] = useState(false); // New state for POP selection
   const [networkData, setNetworkData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -509,7 +529,7 @@ function POPMapPage() {
   // Fetch network data when POP and destinations are set
   const fetchNetworkData = async () => {
     if (!popPoint || destinations.length === 0) {
-      setError("يرجى تحديد نقطة POP ونقطة وجهة واحدة على الأقل");
+      setError(<bdi>"يرجى تحديد نقطة POP ونقطة وجهة واحدة على الأقل"</bdi>);
       return;
     }
     
@@ -556,7 +576,7 @@ function POPMapPage() {
       if (error.response && error.response.data && error.response.data.error) {
         setError(error.response.data.error);
       } else {
-        setError("حدث خطأ أثناء جلب بيانات الشبكة. يرجى المحاولة مرة أخرى.");
+        setError(<bdi>"حدث خطأ أثناء جلب بيانات الشبكة. يرجى المحاولة مرة أخرى."</bdi>);
       }
       
       setNetworkData(null);
@@ -674,7 +694,7 @@ function POPMapPage() {
       }
     } catch (error) {
       console.error('Error fetching Al Hofuf example:', error);
-      setError("حدث خطأ أثناء جلب بيانات مثال الهفوف. يرجى المحاولة مرة أخرى.");
+      setError(<bdi>"حدث خطأ أثناء جلب بيانات مثال الهفوف. يرجى المحاولة مرة أخرى."</bdi>);
       setNetworkData(null);
     } finally {
       setIsLoading(false);
@@ -701,7 +721,7 @@ function POPMapPage() {
     <div className="flex flex-col md:flex-row h-screen bg-gray-100">
       {/* Sidebar with network information */}
       <div className="w-full md:w-96 p-4 overflow-y-auto bg-white shadow-md z-10">
-        <h1 className="text-xl font-bold mb-4 text-gray-800">خريطة شبكة POP</h1>
+        <h1 className="text-xl font-bold mb-4 text-gray-800"><bdi>خريطة شبكة POP</bdi></h1>
         
         {/* Tab navigation */}
         <div className="tab-container">
@@ -709,13 +729,13 @@ function POPMapPage() {
             className={`tab ${activeTab === 'pop' ? 'active' : ''}`}
             onClick={() => setActiveTab('pop')}
           >
-            إعداد الشبكة
+            <bdi>إعداد الشبكة</bdi>
           </div>
           <div 
             className={`tab ${activeTab === 'paths' ? 'active' : ''}`}
             onClick={() => setActiveTab('paths')}
           >
-            المسارات
+            <bdi>المسارات</bdi>
           </div>
         </div>
         
@@ -730,7 +750,7 @@ function POPMapPage() {
         {/* Network setup tab */}
         {activeTab === 'pop' && (
           <div className="coordinate-selection-container">
-            <h2 className="text-lg font-medium mb-4 text-gray-700">إعداد نقطة الحضور (POP)</h2>
+            <h2 className="text-lg font-medium mb-4 text-gray-700"><bdi>إعداد نقطة الحضور (POP)</bdi></h2>
             
             {/* Current location button */}
             <button 
@@ -738,20 +758,20 @@ function POPMapPage() {
               onClick={handleGetCurrentLocation}
             >
               <LocateFixed className="w-4 h-4 mr-2" />
-              الحصول على الموقع الحالي
+              <bdi>الحصول على الموقع الحالي</bdi>
             </button>
             
             {currentLocation && (
               <div className="bg-blue-50 p-3 rounded-md mb-4 text-sm">
-                <div className="font-medium mb-2">تم تحديد موقعك الحالي:</div>
-                <div>خط العرض: {currentLocation.lat.toFixed(7)}</div>
-                <div>خط الطول: {currentLocation.lng.toFixed(7)}</div>
+                <div className="font-medium mb-2"><bdi>تم تحديد موقعك الحالي:</bdi></div>
+                <div><bdi>خط العرض: {currentLocation.lat.toFixed(7)}</bdi></div>
+                <div><bdi>خط الطول: {currentLocation.lng.toFixed(7)}</bdi></div>
                 <div className="mt-2">
                   <button 
                     className="text-blue-600 underline"
                     onClick={useCurrentLocationAsPOP}
                   >
-                    استخدام كنقطة POP
+                    <bdi>استخدام كنقطة POP</bdi>
                   </button>
                 </div>
               </div>
@@ -759,8 +779,27 @@ function POPMapPage() {
             
             {/* POP point manual input */}
             <div className="mb-6">
-              <h3 className="font-medium mb-2 text-gray-700">نقطة الحضور (POP)</h3>
-              <p className="text-sm text-gray-600 mb-2">انقر على الخريطة لتحديد نقطة POP أو أدخل الإحداثيات يدويًا</p>
+              <h3 className="font-medium mb-2 text-gray-700"><bdi>نقطة الحضور (POP)</bdi></h3>
+              <p className="text-sm text-gray-600 mb-2"><bdi>انقر على الخريطة لتحديد نقطة POP أو أدخل الإحداثيات يدويًا</bdi></p>
+              
+              {/* Add POP selection button */}
+              <button 
+                className={`coordinate-button w-full mb-3 ${addingPOP ? 'active' : ''}`}
+                onClick={() => {
+                  setAddingPOP(!addingPOP);
+                  setAddingDestination(false); // Disable destination selection if active
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                <bdi>{addingPOP ? 'إلغاء تحديد POP' : 'تحديد POP على الخريطة'}</bdi>
+                
+              </button>
+              
+              {addingPOP && (
+                <div className="bg-blue-50 p-3 rounded-md mb-4 mx-auto text-center text-sm">
+                  <bdi className="font-medium mx-auto ">انقر على الخريطة لتحديد النقطة</bdi>
+                </div>
+              )}
               
               <form onSubmit={handleManualPOPInput}>
                 <div className="input-container">
@@ -794,7 +833,10 @@ function POPMapPage() {
               <div className="flex gap-2 mb-4">
                 <button 
                   className={`coordinate-button flex-1 ${addingDestination ? 'active' : ''}`}
-                  onClick={() => setAddingDestination(!addingDestination)}
+                  onClick={() => {
+                    setAddingDestination(!addingDestination);
+                    setAddingPOP(false); // Disable POP selection if active
+                  }}
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   {addingDestination ? 'إلغاء الإضافة' : 'إضافة وجهة'}
@@ -1070,8 +1112,10 @@ function POPMapPage() {
                     weight: isSelected ? 5 : 3, 
                     opacity: isSelected ? 1 : 0.7,
                     dashArray: '5, 8',
-                    className: 'pop-path'
+                    // Use dashOffset to enable animation compatibility
+                    dashOffset: 0
                   }}
+                  className="pop-path" // Use className for animation
                   eventHandlers={{
                     click: () => handlePathClick(pathData, pathIndex)
                   }}
@@ -1171,6 +1215,11 @@ function POPMapPage() {
             )}
             
             {/* Map event handlers */}
+            <POPSelector 
+              active={addingPOP}
+              setPOPPoint={setPOPPoint}
+            />
+            
             <DestinationSelector 
               active={addingDestination}
               addDestination={addDestination}

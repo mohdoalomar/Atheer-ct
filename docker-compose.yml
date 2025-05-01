@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Database service
+  postgres:
+    image: postgres:17-alpine
+    container_name: atheer-postgres
+    environment:
+      POSTGRES_DB: atheer
+      POSTGRES_USER: atheer
+      POSTGRES_PASSWORD: atheer123
+    ports:
+      - "5430:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./towers.geojson:/towers.geojson
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atheer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend service
+  backend:
+    build:
+      context: ./atheer-ct
+      dockerfile: Dockerfile
+    container_name: atheer-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/atheer
+      SPRING_DATASOURCE_USERNAME: atheer
+      SPRING_DATASOURCE_PASSWORD: atheer123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    ports:
+      - "8081:8081"
+
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: atheer-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

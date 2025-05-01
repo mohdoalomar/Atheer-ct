@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import POPMapPage from './components/POPMap' 
-import TowerMapPage from './components/TowerMapPage'
-import OldMap from './components/Map';
+import Map from './components/Map';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate} from 'react-router-dom';
 import { Home } from 'lucide-react';
 import Login from './components/Login';
@@ -67,8 +66,7 @@ function AppContent() {
       {/* Routes */}
       <Routes>
       <Route path="/" element={<Homepage />} />
-        <Route path="/tower-map" element={<TowerMapPage />} />
-        <Route path="/old-map" element={<OldMap />} />
+        <Route path="/tower-map" element={<Map />} />
         <Route path="/pop-map" element={<POPMapPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

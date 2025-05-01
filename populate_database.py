@@ -1,13 +1,21 @@
 import json
 import psycopg2
+import os
 
 def insert_into_db(tower_data):
+    # Get database connection parameters from environment variables or use defaults
+    host = os.environ.get("DB_HOST", "localhost")
+    port = os.environ.get("DB_PORT", "5430")
+    database = os.environ.get("DB_NAME", "atheer")
+    user = os.environ.get("DB_USER", "atheer")
+    password = os.environ.get("DB_PASSWORD", "atheer123")
+    
     conn = psycopg2.connect(
-        host="localhost",
-        user="atheer",
-        password="atheer123",
-        database="atheer",
-        port="5430"
+        host=host,
+        user=user,
+        password=password,
+        database=database,
+        port=port
     )
     cursor = conn.cursor()
 

@@ -91,7 +91,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration
-                .setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:5173", "http://localhost",
+                .setAllowedOrigins(Arrays.asList("http://localhost:4173", "http://localhost:5173", "http://localhost",
                         "http://34.18.47.241")); // Add
         // your
         // frontend

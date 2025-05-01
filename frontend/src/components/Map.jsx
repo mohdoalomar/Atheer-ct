@@ -84,7 +84,9 @@ const customStyles = `
   filter: hue-rotate(60deg) brightness(1.2);
 }
 
+/* Fixed animation for paths */
 .tower-path {
+  stroke-dasharray: 5, 8;
   animation: dash 30s linear infinite;
 }
 
@@ -94,6 +96,9 @@ const customStyles = `
 }
 
 @keyframes dash {
+  from {
+    stroke-dashoffset: 0;
+  }
   to {
     stroke-dashoffset: 1000;
   }
@@ -761,6 +766,7 @@ function TowerMapPage() {
                     />
                   </div>
                   <button type="submit" className="coordinate-button">تحديث نقطة البداية</button>
+                 
                 </form>
               </div>
               
@@ -823,8 +829,9 @@ function TowerMapPage() {
                   weight: 3, 
                   opacity: 0.8,
                   dashArray: '5, 8',
-                  className: 'tower-path'
+                  dashOffset: 0
                 }}
+                className="tower-path"
               />
             )}
             
@@ -839,8 +846,10 @@ function TowerMapPage() {
                   color: '#8B5CF6', 
                   weight: 3, 
                   opacity: 0.8,
-                  className: 'custom-path'
+                  dashArray: '5, 10',
+                  dashOffset: 0
                 }}
+                className="custom-path"
               />
             )}
             
@@ -901,6 +910,23 @@ function TowerMapPage() {
               </Marker>
             )}
             
+            {/* Current location marker */}
+            {currentLocation && (
+              <Marker position={[currentLocation.lat, currentLocation.lng]} icon={currentLocationIcon}>
+                <Tooltip 
+                  permanent={false}
+                  direction="top"
+                  className="tower-details"
+                >
+                  <div>
+                    <strong>موقعك الحالي</strong>
+                    <br/>
+                    {currentLocation.lat.toFixed(7)}, {currentLocation.lng.toFixed(7)}
+                  </div>
+                </Tooltip>
+              </Marker>
+            )}
+            
             {/* Coordinate selection handler */}
             <CoordinateSelector 
               selectingStart={selectingStart}
@@ -908,6 +934,12 @@ function TowerMapPage() {
               endPoint={endPoint}
               setStartPoint={setStartPoint}
               setEndPoint={setEndPoint}
+            />
+            
+            {/* Add location component to track user's current location */}
+            <LocationComponent 
+              map={mapRef}
+              setCurrentLocation={setCurrentLocation}
             />
             
             <ZoomControl towerData={towerData} />
@@ -919,3 +951,4 @@ function TowerMapPage() {
 }
 
 export default TowerMapPage;
+ 
