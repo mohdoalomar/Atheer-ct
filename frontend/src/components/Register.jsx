@@ -24,7 +24,7 @@ const Register = () => {
     const { name, value } = e.target;
     setUserData(prev => ({
       ...prev,
-      [name]: value
+[name]: name === 'username' ? value.toLowerCase() : value
     }));
   };
 

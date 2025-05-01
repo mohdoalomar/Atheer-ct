@@ -22,7 +22,7 @@ const Login = () => {
     }));
   };
   const formData = new URLSearchParams();
-  formData.append('username', credentials.username);
+  formData.append('username', credentials.username.toLowerCase());
   formData.append('password', credentials.password);
   const handleSubmit = async (e) => {
     e.preventDefault();

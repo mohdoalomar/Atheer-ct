@@ -47,6 +47,7 @@ function AppContent() {
   return (
     <>
       {/* Navigation Menu */}
+      {window.location.pathname === '/login' || window.location.pathname === '/register' ? null : 
       <div className="fixed top-0 right-0 z-[999999] p-4">
         <div className="bg-white shadow-lg rounded-lg p-2">
           <Link to="/" className="block p-2 hover:bg-gray-100 rounded">
@@ -62,7 +63,7 @@ function AppContent() {
           </div>
         </div>
       </div>
-      
+      }
       {/* Routes */}
       <Routes>
       <Route path="/" element={<Homepage />} />
