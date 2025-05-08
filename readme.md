@@ -92,3 +92,22 @@ All services share utility methods for:
 3.  **`CombinedPathService` Overhead:**
     *   Running two full pathfinding algorithms (BFS and A\*) in `CombinedPathService` inherently increases computation time compared to running just one. The benefits of the combined approach need to be weighed against this cost.
 
+    ---
+
+## Running the Project
+
+To run the project and set up the environment:
+
+1.  **Start Docker Containers:**
+    Open a terminal in the project's root directory (where `docker-compose.yml` is located) and run:
+    ```bash
+    docker-compose up -d
+    ```
+
+2.  **Populate the Database (One-Time Setup):**
+    After the Docker containers are up and running (especially the database container), execute the Python script to populate the database with initial tower data.
+    Navigate to the directory containing `populate_database.py` and run:
+    ```bash
+    python populate_database.py
+    ```
+
